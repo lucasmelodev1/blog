@@ -1,17 +1,17 @@
-use crate::AppState;
 use crate::utils::database;
+use crate::AppState;
 
+use async_trait::async_trait;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
+use chrono::{DateTime, Utc};
+use database::Crud;
 use mongodb::bson;
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
-use async_trait::async_trait;
-use database::Crud;
 
 // needed to call .next() in mongodb Cursor type
-use futures::{StreamExt};
+use futures::StreamExt;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct Post {
@@ -23,12 +23,15 @@ pub struct Post {
     #[serde(rename = "createdAt", skip_serializing_if = "Option::is_none")]
     pub created_at: Option<DateTime<Utc>>,
     #[serde(rename = "updatedAt", skip_serializing_if = "Option::is_none")]
-    pub updated_at: Option<DateTime<Utc>>
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[async_trait]
-impl Crud<Post> for Post {
-    async fn create(State(state): State<AppState>, Json(payload): Json<Post>) -> (StatusCode, Json<Post>){
+impl Crud<Post, Post> for Post {
+    async fn create(
+        State(state): State<AppState>,
+        Json(payload): Json<Post>,
+    ) -> (StatusCode, Json<Post>) {
         let now = Utc::now();
         let post = Post {
             id: None,
@@ -36,19 +39,20 @@ impl Crud<Post> for Post {
             title: payload.title,
             content: payload.content,
             created_at: Some(now),
-            updated_at: Some(now)
+            updated_at: Some(now),
         };
 
         let insert_result = state.posts_collection.insert_one(&post, None).await;
 
         match insert_result {
             Ok(_) => (StatusCode::CREATED, Json(post)),
-            Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(post))
+            Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(post)),
         }
     }
 
     async fn read_all(State(state): State<AppState>) -> (StatusCode, Json<Vec<Post>>) {
-        let mut posts_cursor = state.posts_collection
+        let mut posts_cursor = state
+            .posts_collection
             .find(None, None)
             .await
             .expect("Failed to execute find.");
@@ -61,8 +65,12 @@ impl Crud<Post> for Post {
         (StatusCode::FOUND, Json(posts))
     }
 
-    async fn read(Path(id): Path<bson::oid::ObjectId>, State(state): State<AppState>) -> (StatusCode, Json<Post>) {
-        let post = state.posts_collection
+    async fn read(
+        Path(id): Path<bson::oid::ObjectId>,
+        State(state): State<AppState>,
+    ) -> (StatusCode, Json<Post>) {
+        let post = state
+            .posts_collection
             .find_one(bson::doc! { "_id": id }, None)
             .await
             .expect("Failed to execute find_one.")
@@ -71,7 +79,11 @@ impl Crud<Post> for Post {
         (StatusCode::FOUND, Json(post))
     }
 
-    async fn update(Path(id): Path<bson::oid::ObjectId>, State(state): State<AppState>, Json(payload): Json<Post>) -> (StatusCode, Json<Post>) {
+    async fn update(
+        Path(id): Path<bson::oid::ObjectId>,
+        State(state): State<AppState>,
+        Json(payload): Json<Post>,
+    ) -> (StatusCode, Json<Post>) {
         let post = state.posts_collection
             .find_one_and_update(
                 bson::doc! { "_id": id },
@@ -85,8 +97,12 @@ impl Crud<Post> for Post {
         (StatusCode::OK, Json(post))
     }
 
-    async fn delete(Path(id): Path<bson::oid::ObjectId>, State(state): State<AppState>) -> (StatusCode, Json<Post>) {
-        let post = state.posts_collection
+    async fn delete(
+        Path(id): Path<bson::oid::ObjectId>,
+        State(state): State<AppState>,
+    ) -> (StatusCode, Json<Post>) {
+        let post = state
+            .posts_collection
             .find_one_and_delete(bson::doc! { "_id": id }, None)
             .await
             .expect("Failed to execute find_one_and_delete.")

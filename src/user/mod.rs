@@ -24,7 +24,7 @@ pub struct User {
 }
 
 #[async_trait]
-impl Crud<User> for User {
+impl Crud<User, User> for User {
     async fn create(
         State(state): State<AppState>,
         Json(json): Json<User>,

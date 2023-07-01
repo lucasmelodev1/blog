@@ -12,12 +12,12 @@ use axum::{
     routing::{delete, get, patch, post},
     Router,
 };
-use axum_sessions::{async_session::MemoryStore, SessionLayer};
 use mongodb::{
     bson::doc,
     options::{ClientOptions, ServerApi, ServerApiVersion},
     Client, Collection,
 };
+use session::Session;
 
 #[derive(Clone)]
 struct AppState {
@@ -26,6 +26,7 @@ struct AppState {
     pub posts_collection: Collection<Post>,
     pub users_collection: Collection<User>,
     pub auths_collection: Collection<Auth>,
+    pub sessions_collection: Collection<Session>,
 }
 
 #[tokio::main]
@@ -33,20 +34,15 @@ async fn main() -> mongodb::error::Result<()> {
     let client = get_database_client()
         .await
         .expect("Failed to connect to database.");
-    let store = MemoryStore::new();
-    let secret = "1234567891234567891234567891234567891234567891234567891234567891".as_bytes();
-    let session_layer = SessionLayer::new(store, secret).with_secure(false);
 
-    let app = Router::new()
-        .nest("/api", make_api())
-        .with_state(AppState {
-            // client: client.clone(),
-            // database: client.database("blog"),
-            posts_collection: client.database("blog").collection::<Post>("posts"),
-            users_collection: client.database("blog").collection::<User>("users"),
-            auths_collection: client.database("blog").collection::<Auth>("auths"),
-        })
-        .layer(session_layer);
+    let app = Router::new().nest("/api", make_api()).with_state(AppState {
+        // client: client.clone(),
+        // database: client.database("blog"),
+        posts_collection: client.database("blog").collection::<Post>("posts"),
+        users_collection: client.database("blog").collection::<User>("users"),
+        auths_collection: client.database("blog").collection::<Auth>("auths"),
+        sessions_collection: client.database("blog").collection::<Session>("sessions"),
+    });
 
     axum::Server::bind(&"0.0.0.0:4000".parse().unwrap())
         .serve(app.into_make_service())
@@ -74,7 +70,7 @@ fn make_api() -> Router<AppState> {
         .route("/auth/:id", patch(Auth::update))
         .route("/auth/:id", delete(Auth::delete))
         .route("/auth/sign-in", post(Auth::sign_in))
-        .route("/auth/sign-in-session/:id", post(Auth::sign_in_session))
+        .route("/auth/sign-in-session", post(Auth::sign_in_session))
 }
 
 async fn get_database_client() -> mongodb::error::Result<Client> {
